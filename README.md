@@ -3,6 +3,8 @@
 A tiny [Claude Code](https://docs.anthropic.com/en/docs/claude-code) **Stop hook** that catches the
 "tool-call-as-text" stall and forces a clean retry. ~100 lines of bash. Fail-open. Needs only `bash` + `python3`.
 
+![court-recover: a tool call leaks out as text and the turn stalls; the hook catches it and forces a clean retry](assets/cover.png)
+
 ---
 
 ## The bug it fixes
