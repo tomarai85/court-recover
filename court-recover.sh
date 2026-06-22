@@ -36,22 +36,43 @@ except Exception: print('')" 2>/dev/null)
 TRANSCRIPT=$(printf '%s' "$INPUT" | python3 -c "import sys,json
 try: print(json.load(sys.stdin).get('transcript_path','') or '')
 except Exception: print('')" 2>/dev/null)
-{ [ -z "$TRANSCRIPT" ] || [ ! -f "$TRANSCRIPT" ]; } && exit 0
 
 TOKENS="${COURT_RECOVER_TOKENS:-court|call|count|course}"
 
 # Detect a malformed tool-call-as-text emission in the LAST assistant message.
-# Tight signature (so a turn DISCUSSING the bug -- like this comment -- is NOT flagged):
-#   the message's text has a canary token ALONE on a line, immediately followed by a
-#   line starting with `<invoke name=`, the text ENDS with the emitted call markup,
-#   AND the message has NO real tool_use block.
-DET=$(TRANSCRIPT="$TRANSCRIPT" TOKENS="$TOKENS" python3 <<'PY' 2>/dev/null
-import os, json, re
-p = os.environ["TRANSCRIPT"]
+# Fast path: if the Stop payload includes `last_assistant_message` and it has NO
+# canary signature, exit clean WITHOUT reading the transcript (the common case).
+# Only when the signature is present do we read the transcript -- to confirm there
+# is no real tool_use block in that message.
+#
+# Tight signature (so a turn that merely DISCUSSES the bug is not flagged):
+#   a canary token ALONE on a line, immediately followed by a line starting with
+#   `<invoke name=`, the text ENDS with the call markup, AND no real tool_use block.
+DET=$(INPUT_RAW="$INPUT" TRANSCRIPT="$TRANSCRIPT" TOKENS="$TOKENS" python3 <<'PY' 2>/dev/null
+import os, json, re, sys
+raw = os.environ.get("INPUT_RAW", "")
+transcript = os.environ.get("TRANSCRIPT", "")
 tokens = os.environ.get("TOKENS", "court|call|count|course")
+canary = re.compile(r'(?m)^[ \t]*(' + tokens + r')[ \t]*\r?\n[ \t]*<invoke name=')
+
+def malformed_text(t):
+    return bool(canary.search(t)) and t.rstrip().endswith("</invoke>")
+
+# Fast path via last_assistant_message (no file read when there is no signature).
+lam = ""
+try:
+    lam = json.loads(raw).get("last_assistant_message") or ""
+except Exception:
+    lam = ""
+if lam and not malformed_text(lam):
+    print("0"); sys.exit()
+
+# Need the transcript to confirm signature + absence of a real tool_use block.
+if not transcript or not os.path.isfile(transcript):
+    print("0"); sys.exit()
 last = None
 try:
-    with open(p, encoding="utf-8") as fh:
+    with open(transcript, encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
             if not line.startswith("{"):
@@ -73,42 +94,48 @@ try:
             elif isinstance(c, str):
                 last = [{"type": "text", "text": c}]
 except Exception:
-    print("0"); raise SystemExit
+    print("0"); sys.exit()
 if not last:
-    print("0"); raise SystemExit
+    print("0"); sys.exit()
 has_tool_use = any(isinstance(b, dict) and b.get("type") == "tool_use" for b in last)
 text = "\n".join(b.get("text", "") for b in last if isinstance(b, dict) and b.get("type") == "text")
-canary = re.compile(r'(?m)^[ \t]*(' + tokens + r')[ \t]*\r?\n[ \t]*<invoke name=')
-# malformed = canary token + raw invoke markup, AND the text ENDS with the (text-emitted)
-# call -> the turn terminated into it (a real stall). The endswith gate keeps a turn that
-# merely DISCUSSES the bug in prose / code fences from ever being blocked.
-malformed = bool(canary.search(text)) and text.rstrip().endswith("</invoke>")
-print("1" if (malformed and not has_tool_use) else "0")
+print("1" if (malformed_text(text) and not has_tool_use) else "0")
 PY
 )
 
+# Per-session state lives in a private, per-user dir; SID is sanitized to a safe
+# filename (raw session_id must never reach the path -> no `/` or `..` injection).
+SID_SAFE=$(printf '%s' "$SID" | tr -cd 'A-Za-z0-9._-')
+STATE_DIR="${TMPDIR:-/tmp}/court-recover-$(id -u 2>/dev/null || echo 0)"
+
 # Clean turn -> reset the per-session recovery counter and let it stop.
-[ "$DET" = "1" ] || { [ -n "$SID" ] && rm -f "/tmp/court-recover-$SID" 2>/dev/null; exit 0; }
+if [ "$DET" != "1" ]; then
+  [ -n "$SID_SAFE" ] && rm -f "$STATE_DIR/$SID_SAFE" 2>/dev/null
+  exit 0
+fi
 
-# No per-session blocking state without a real SID (empty would collide cross-session).
-[ -z "$SID" ] && exit 0
+# No per-session blocking state without a usable SID (avoids cross-session collision).
+[ -z "$SID_SAFE" ] && exit 0
 
-CF="/tmp/court-recover-$SID"
+mkdir -p "$STATE_DIR" 2>/dev/null || true
+chmod 700 "$STATE_DIR" 2>/dev/null || true
+CF="$STATE_DIR/$SID_SAFE"
 N=$(cat "$CF" 2>/dev/null | tr -dc '0-9'); N=${N:-0}
 CAP="${COURT_RECOVER_CAP:-2}"
-LOG="${COURT_RECOVER_LOG:-$HOME/.claude/logs/court-recover.log}"
+case "$CAP" in ''|*[!0-9]*) CAP=2 ;; esac   # non-numeric -> default (stay fail-open)
+LOG="${COURT_RECOVER_LOG:-${HOME:-/tmp}/.claude/logs/court-recover.log}"
 mkdir -p "$(dirname "$LOG")" 2>/dev/null || true
 
-# Exhausted: after CAP forced re-issues, just let the turn stop (the model can re-issue
+# Exhausted: after CAP forced re-issues, let the turn stop (the model can re-issue
 # on its own). No context-degraded / /compact advice -- modern Claude Code auto-compacts.
 if [ "$N" -ge "$CAP" ]; then
   printf '0' > "$CF" 2>/dev/null || true
-  echo "[$(date '+%F %T')] [court-recover] exhausted (>=${CAP}) -> let stop | SID=$SID" >> "$LOG" 2>/dev/null || true
+  echo "[$(date '+%F %T' 2>/dev/null)] [court-recover] exhausted (>=${CAP}) -> let stop | SID=$SID_SAFE" >> "$LOG" 2>/dev/null || true
   exit 0
 fi
 
 # Force a clean re-issue.
 printf '%s' "$((N + 1))" > "$CF" 2>/dev/null || true
-echo "[$(date '+%F %T')] [court-recover] tool-call-as-text -> forcing re-issue (#$((N + 1))/${CAP}) | SID=$SID" >> "$LOG" 2>/dev/null || true
+echo "[$(date '+%F %T' 2>/dev/null)] [court-recover] tool-call-as-text -> forcing re-issue (#$((N + 1))/${CAP}) | SID=$SID_SAFE" >> "$LOG" 2>/dev/null || true
 echo "TOOL-CALL RECOVERY: your previous turn emitted a tool call as LITERAL TEXT -- a stray token (court/count/call) followed by raw invoke markup written as prose -- so NOTHING executed and the turn stalled. Do NOT write tool-call markup as text. Re-issue the SAME tool call NOW as a real, structured tool call." >&2
 exit 2

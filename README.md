@@ -1,7 +1,7 @@
 # court-recover
 
 A tiny [Claude Code](https://docs.anthropic.com/en/docs/claude-code) **Stop hook** that catches the
-"tool-call-as-text" stall and forces a clean retry. ~100 lines of bash. Fail-open. No dependencies.
+"tool-call-as-text" stall and forces a clean retry. ~100 lines of bash. Fail-open. Needs only `bash` + `python3`.
 
 ---
 
@@ -31,7 +31,7 @@ fix is to **detect it after the turn and force a bounded clean re-issue** — wh
 
 Registered as a `Stop` hook, on each turn it:
 
-1. Reads the last assistant message from the transcript.
+1. Reads the last assistant message (from the Stop payload's `last_assistant_message`, falling back to the transcript).
 2. Checks for the malformed signature (canary token + raw `<invoke>` markup + no real tool call).
 3. If found, **blocks the stop** and tells the model to re-issue the *same* call as a real tool call.
 4. Bounded: after `N` attempts (default 2) it gives up and lets the turn stop.
@@ -66,18 +66,22 @@ all, and a `block` from any one is enough.
 
 ## How it avoids false positives
 
-The detection signature is deliberately tight, so a turn that merely *discusses* the bug (like this README,
-or a code fence showing the markup) is never flagged. All of these must hold:
+The detection signature is deliberately tight, so a turn that merely *discusses* the bug — in prose, or in a
+code fence with text after it — is not flagged. All of these must hold:
 
 - a canary token sits **alone on a line**, **immediately followed** by a line starting with `<invoke name=`,
 - the message text **ends** with the emitted call markup (`</invoke>`) — i.e. the turn actually terminated into it,
 - the message contains **no real `tool_use` block**.
 
+One residual edge case: a legitimate message that *ends* on a raw, unfenced sample of the exact malformed
+markup (with nothing after it) would be flagged. It's rare, and bounded — at most `COURT_RECOVER_CAP`
+re-issues, then the turn is allowed to stop.
+
 ## Config (env vars, all optional)
 
 | Var | Default | Meaning |
 |---|---|---|
-| `COURT_RECOVER_CAP` | `2` | Max forced re-issues per session before giving up |
+| `COURT_RECOVER_CAP` | `2` | Max forced re-issues per session before giving up (non-numeric → treated as `2`) |
 | `COURT_RECOVER_TOKENS` | `court\|call\|count\|course` | Regex alternation of canary tokens to watch for |
 | `COURT_RECOVER_LOG` | `~/.claude/logs/court-recover.log` | Log file path |
 
