@@ -99,6 +99,16 @@ So every error path here exits `0` (let the turn stop). The worst this hook can 
 `court-recover` is named after the stray tokens — `court` / `count` / `call` / `course` — that signal the
 bug. They're the canary in the coal mine.
 
+## Tests
+
+```bash
+python3 test/court-recover.test.py
+```
+
+Verifies detection, false-positive avoidance (real tool calls and prose that merely
+discusses the bug are not flagged), fail-open on bad input, and the bounded
+"can never freeze a session" guarantee. Needs only `python3` + `bash`.
+
 ## License
 
 MIT — see [LICENSE](./LICENSE).

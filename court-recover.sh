@@ -126,10 +126,11 @@ case "$CAP" in ''|*[!0-9]*) CAP=2 ;; esac   # non-numeric -> default (stay fail-
 LOG="${COURT_RECOVER_LOG:-${HOME:-/tmp}/.claude/logs/court-recover.log}"
 mkdir -p "$(dirname "$LOG")" 2>/dev/null || true
 
-# Exhausted: after CAP forced re-issues, let the turn stop (the model can re-issue
-# on its own). No context-degraded / /compact advice -- modern Claude Code auto-compacts.
+# Exhausted: after CAP forced re-issues, let the turn stop. Do NOT reset the counter
+# here -- keep it >= CAP so a PERSISTENTLY malformed session stays stopped ("at most
+# CAP re-issues" is a true per-episode ceiling, not per-burst). A genuine clean turn
+# re-arms it (the counter file is removed at the top of this script on any clean turn).
 if [ "$N" -ge "$CAP" ]; then
-  printf '0' > "$CF" 2>/dev/null || true
   echo "[$(date '+%F %T' 2>/dev/null)] [court-recover] exhausted (>=${CAP}) -> let stop | SID=$SID_SAFE" >> "$LOG" 2>/dev/null || true
   exit 0
 fi
