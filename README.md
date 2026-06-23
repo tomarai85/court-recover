@@ -94,6 +94,9 @@ re-issues, then the turn is allowed to stop.
 A Stop hook that *blocks* sits on the critical path of every turn. A bug in it could freeze your session.
 So every error path here exits `0` (let the turn stop). The worst this hook can do is *nothing* — never harm.
 
+The bounded counter (at most `CAP` forced re-issues per episode) assumes Stop hooks run serially per
+session — which Claude Code does. It does not lock against concurrent same-session invocations.
+
 ## The name
 
 `court-recover` is named after the stray tokens — `court` / `count` / `call` / `course` — that signal the

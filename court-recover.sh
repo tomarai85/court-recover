@@ -108,7 +108,10 @@ PY
 # length overflow, AND cross-session collisions from lossy character stripping.
 SID_SAFE=""
 if [ -n "$SID" ]; then
-  SID_SAFE=$(printf '%s' "$SID" | { shasum 2>/dev/null || sha1sum 2>/dev/null || cksum; } 2>/dev/null | tr -cd 'a-f0-9' | cut -c1-40)
+  # Fixed-length hex. If no crypto-hash tool exists, SID_SAFE stays empty and we exit 0
+  # below (fail-open) -- we do NOT fall back to cksum (variable-length, collision-prone),
+  # which would undermine the fixed-length / no-collision property.
+  SID_SAFE=$(printf '%s' "$SID" | { shasum 2>/dev/null || sha1sum 2>/dev/null; } 2>/dev/null | tr -cd 'a-f0-9' | cut -c1-40)
 fi
 STATE_DIR="${TMPDIR:-/tmp}/court-recover-$(id -u 2>/dev/null || echo 0)"
 
