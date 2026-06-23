@@ -112,6 +112,13 @@ Verifies detection, false-positive avoidance (real tool calls and prose that mer
 discusses the bug are not flagged), fail-open on bad input, and the bounded
 "can never freeze a session" guarantee. Needs only `python3` + `bash`.
 
+## Related
+
+[closure-auditor](https://github.com/tomarai85/closure-auditor) — same idea, a different bluff: it catches
+an agent claiming **the tests pass** when no test command ever ran in the session. Both are small,
+fail-open Stop hooks built on one thesis: agents claim completion they didn't verify, so gate the claim
+with evidence instead of trusting it.
+
 ## License
 
 MIT — see [LICENSE](./LICENSE).
