@@ -3,7 +3,7 @@
 A tiny [Claude Code](https://docs.anthropic.com/en/docs/claude-code) **Stop hook** that catches the
 "tool-call-as-text" stall and forces a clean retry. ~100 lines of bash. Fail-open. Needs only `bash` + `python3`.
 
-> 日本語: Claude Code を長時間回すと、tool 呼び出しが「テキスト」で漏れて(`court`/`count` 等のトークン + 生の `<invoke>` markup)、何も実行されず無言でターンが止まるバグを検知し、正しい呼び出しに自動で出し直させる小さな Stop hook。約120行 bash・fail-open・MIT。
+> 日本語: Claude Code を長時間回すと、tool 呼び出しが「テキスト」で漏れて(`court`/`count` 等のトークン + 生の `<invoke>` markup)、何も実行されず無言でターンが止まるバグを検知し、正しい呼び出しに自動で出し直させる小さな Stop hook。約100行 bash・fail-open・MIT。
 
 ![court-recover: a tool call leaks out as text and the turn stalls; the hook catches it and forces a clean retry](assets/cover.png)
 
