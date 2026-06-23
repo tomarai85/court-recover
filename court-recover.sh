@@ -103,9 +103,13 @@ print("1" if (malformed_text(text) and not has_tool_use) else "0")
 PY
 )
 
-# Per-session state lives in a private, per-user dir; SID is sanitized to a safe
-# filename (raw session_id must never reach the path -> no `/` or `..` injection).
-SID_SAFE=$(printf '%s' "$SID" | tr -cd 'A-Za-z0-9._-')
+# Per-session state lives in a private, per-user dir. The raw session_id must never
+# reach the path: HASH it to a fixed-length hex name. This removes `/`, `.`, `..`,
+# length overflow, AND cross-session collisions from lossy character stripping.
+SID_SAFE=""
+if [ -n "$SID" ]; then
+  SID_SAFE=$(printf '%s' "$SID" | { shasum 2>/dev/null || sha1sum 2>/dev/null || cksum; } 2>/dev/null | tr -cd 'a-f0-9' | cut -c1-40)
+fi
 STATE_DIR="${TMPDIR:-/tmp}/court-recover-$(id -u 2>/dev/null || echo 0)"
 
 # Clean turn -> reset the per-session recovery counter and let it stop.
@@ -114,12 +118,18 @@ if [ "$DET" != "1" ]; then
   exit 0
 fi
 
-# No per-session blocking state without a usable SID (avoids cross-session collision).
+# No per-session blocking state without a usable hashed SID (avoids collision).
 [ -z "$SID_SAFE" ] && exit 0
 
+# Build the state dir and REQUIRE it to be a real, owned, writable, non-symlink dir.
+# Anything else (precreated symlink, wrong owner, unwritable) -> fail OPEN, never block.
 mkdir -p "$STATE_DIR" 2>/dev/null || true
 chmod 700 "$STATE_DIR" 2>/dev/null || true
+if [ ! -d "$STATE_DIR" ] || [ -L "$STATE_DIR" ] || [ ! -w "$STATE_DIR" ] || [ ! -O "$STATE_DIR" ]; then
+  exit 0
+fi
 CF="$STATE_DIR/$SID_SAFE"
+[ -L "$CF" ] && exit 0   # never follow a symlinked counter file
 N=$(cat "$CF" 2>/dev/null | tr -dc '0-9'); N=${N:-0}
 CAP="${COURT_RECOVER_CAP:-2}"
 case "$CAP" in ''|*[!0-9]*) CAP=2 ;; esac   # non-numeric -> default (stay fail-open)
@@ -127,16 +137,25 @@ LOG="${COURT_RECOVER_LOG:-${HOME:-/tmp}/.claude/logs/court-recover.log}"
 mkdir -p "$(dirname "$LOG")" 2>/dev/null || true
 
 # Exhausted: after CAP forced re-issues, let the turn stop. Do NOT reset the counter
-# here -- keep it >= CAP so a PERSISTENTLY malformed session stays stopped ("at most
-# CAP re-issues" is a true per-episode ceiling, not per-burst). A genuine clean turn
-# re-arms it (the counter file is removed at the top of this script on any clean turn).
+# here -- keep it >= CAP so a PERSISTENTLY malformed session stays stopped. A genuine
+# clean turn re-arms it (the counter file is removed at the top on any clean turn).
 if [ "$N" -ge "$CAP" ]; then
-  echo "[$(date '+%F %T' 2>/dev/null)] [court-recover] exhausted (>=${CAP}) -> let stop | SID=$SID_SAFE" >> "$LOG" 2>/dev/null || true
+  echo "[$(date '+%F %T' 2>/dev/null)] [court-recover] exhausted (>=${CAP}) -> let stop" >> "$LOG" 2>/dev/null || true
   exit 0
 fi
 
-# Force a clean re-issue.
-printf '%s' "$((N + 1))" > "$CF" 2>/dev/null || true
-echo "[$(date '+%F %T' 2>/dev/null)] [court-recover] tool-call-as-text -> forcing re-issue (#$((N + 1))/${CAP}) | SID=$SID_SAFE" >> "$LOG" 2>/dev/null || true
+# Force a clean re-issue -- but ONLY if we can DURABLY persist the incremented counter.
+# If the write cannot be verified, fail OPEN (exit 0): blocking without a persisted
+# counter would never advance CAP and could freeze the session forever.
+NEW=$((N + 1))
+TMP="$CF.tmp.$$"
+if ! printf '%s' "$NEW" > "$TMP" 2>/dev/null || ! mv -f "$TMP" "$CF" 2>/dev/null; then
+  rm -f "$TMP" 2>/dev/null
+  exit 0
+fi
+GOT=$(cat "$CF" 2>/dev/null | tr -dc '0-9')
+[ "$GOT" = "$NEW" ] || exit 0   # counter did not actually persist -> fail open
+
+echo "[$(date '+%F %T' 2>/dev/null)] [court-recover] tool-call-as-text -> forcing re-issue (#${NEW}/${CAP})" >> "$LOG" 2>/dev/null || true
 echo "TOOL-CALL RECOVERY: your previous turn emitted a tool call as LITERAL TEXT -- a stray token (court/count/call) followed by raw invoke markup written as prose -- so NOTHING executed and the turn stalled. Do NOT write tool-call markup as text. Re-issue the SAME tool call NOW as a real, structured tool call." >&2
 exit 2

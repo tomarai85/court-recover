@@ -68,5 +68,27 @@ payload = {"session_id": s, "last_assistant_message": MAL, "transcript_path": t}
 seq = [run(payload) for _ in range(4)]
 check("bounded: block,block,then let stop (CAP=2)", seq, [2, 2, 0, 0])
 
+# --- failure-injection (Codex-found infinite-block paths) must FAIL-OPEN / stay bounded ---
+def run_env(payload, extra):
+    e = dict(os.environ); e.update(extra)
+    r = subprocess.run(["bash", HOOK], input=json.dumps(payload).encode(), capture_output=True, env=e)
+    return r.returncode
+
+_notdir = tempfile.mktemp(prefix="cr-notadir-")
+open(_notdir, "w").write("x")  # a FILE where a state dir would go
+check("TMPDIR is a file -> fail-open (no infinite block)",
+      run_env({"session_id": sid(), "last_assistant_message": MAL,
+               "transcript_path": transcript([{"type": "text", "text": MAL}])}, {"TMPDIR": _notdir}), 0)
+
+p2 = {"session_id": "..", "last_assistant_message": MAL,
+      "transcript_path": transcript([{"type": "text", "text": MAL}])}
+check("session_id='..' -> hashed, bounded (no path injection / no infinite block)",
+      [run(p2) for _ in range(4)], [2, 2, 0, 0])
+
+p3 = {"session_id": "x" * 6000, "last_assistant_message": MAL,
+      "transcript_path": transcript([{"type": "text", "text": MAL}])}
+check("overlong session_id -> hashed to fixed length, bounded",
+      [run(p3) for _ in range(4)], [2, 2, 0, 0])
+
 print(f"\n{passed}/{total} passed")
 sys.exit(0 if passed == total else 1)
