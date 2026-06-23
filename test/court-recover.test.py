@@ -80,12 +80,13 @@ check("TMPDIR is a file -> fail-open (no infinite block)",
       run_env({"session_id": sid(), "last_assistant_message": MAL,
                "transcript_path": transcript([{"type": "text", "text": MAL}])}, {"TMPDIR": _notdir}), 0)
 
-p2 = {"session_id": "..", "last_assistant_message": MAL,
+# Unique-per-run ids so the suite is idempotent (the hashed counter file persists in TMPDIR).
+p2 = {"session_id": "../../../tmp/evil-" + str(time.time_ns()), "last_assistant_message": MAL,
       "transcript_path": transcript([{"type": "text", "text": MAL}])}
-check("session_id='..' -> hashed, bounded (no path injection / no infinite block)",
+check("path-traversal session_id -> hashed, bounded (no path injection / no infinite block)",
       [run(p2) for _ in range(4)], [2, 2, 0, 0])
 
-p3 = {"session_id": "x" * 6000, "last_assistant_message": MAL,
+p3 = {"session_id": "x" * 6000 + "-" + str(time.time_ns()), "last_assistant_message": MAL,
       "transcript_path": transcript([{"type": "text", "text": MAL}])}
 check("overlong session_id -> hashed to fixed length, bounded",
       [run(p3) for _ in range(4)], [2, 2, 0, 0])
