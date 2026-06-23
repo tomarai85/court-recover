@@ -86,7 +86,7 @@ re-issues, then the turn is allowed to stop.
 | Var | Default | Meaning |
 |---|---|---|
 | `COURT_RECOVER_CAP` | `2` | Max forced re-issues per session before giving up (non-numeric → treated as `2`) |
-| `COURT_RECOVER_TOKENS` | `court\|call\|count\|course` | Regex alternation of canary tokens to watch for |
+| `COURT_RECOVER_TOKENS` | `court\|call\|count\|course` | Regex alternation of canary tokens to watch for. Compiled as-is — keep it a simple alternation; a pathological pattern can be slow. |
 | `COURT_RECOVER_LOG` | `~/.claude/logs/court-recover.log` | Log file path |
 
 ## Why fail-open
