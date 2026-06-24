@@ -27,9 +27,10 @@ Because it is *text*, **nothing executes**. The result:
 - **Autonomous / agentic loops stall silently** — the turn "ends" having done nothing, and the loop sits there.
 - **Interactive sessions reply, then do nothing** — the model says "running the tests now…" and… doesn't.
 
-It is intermittent, it shows up exactly when you're not watching, and there is no off-the-shelf fix.
-Claude Code has no output-stream rewrite hook, so you can't strip the bad markup mid-stream. The feasible
-fix is to **detect it after the turn and force a bounded clean re-issue** — which is all this hook does.
+It is intermittent, and it shows up exactly when you're not watching. I couldn't find a small local
+guard for this exact failure mode, so I wrote one. `Stop` is the stable hook point Claude Code exposes
+to users, so the practical approach is to **detect it after the turn and force a bounded clean re-issue**
+— which is all this hook does. (It does not rewrite the stream mid-flight; it catches the stalled turn.)
 
 ## What it does
 
