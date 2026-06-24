@@ -122,13 +122,6 @@ commit history lists the specific findings fixed (durable counter before block, 
 `cksum` fallback, per-episode CAP). Since it sits on the Stop critical path, "can never freeze a session"
 is the property that mattered most.
 
-## Related
-
-[closure-auditor](https://github.com/tomarai85/closure-auditor) — same idea, a different bluff: it catches
-an agent claiming **the tests pass** when no test command ever ran in the session. Both are small,
-fail-open Stop hooks built on one thesis: agents claim completion they didn't verify, so gate the claim
-with evidence instead of trusting it.
-
 ## License
 
 MIT — see [LICENSE](./LICENSE).
