@@ -111,13 +111,13 @@ bug. They're the canary in the coal mine.
 
 ```bash
 python3 test/court-recover.test.py
-# -> 11/11 passed
+# -> 12/12 passed
 ```
 
-11 cases, `python3` + `bash` only. They cover:
+12 cases, `python3` + `bash` only. They cover:
 
 - **detection** of the malformed signature, and **false-positive avoidance** — a real `tool_use` block, or prose that merely *discusses* the bug, is not flagged;
-- **fail-open** on bad input (e.g. `TMPDIR` pointing at a file) → exits `0`, never blocks;
+- **fail-open** on bad input (e.g. `TMPDIR` pointing at a file, or a malformed `COURT_RECOVER_TOKENS` regex) → exits `0`, never blocks;
 - **bounded** behaviour: blocks at most `CAP` times per episode, then lets the turn stop (`exit=[2, 2, 0, 0]` at `CAP=2`);
 - **security**: a path-traversal or overlong `session_id` is hashed to a fixed-length state path (no path injection), still bounded.
 

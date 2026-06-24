@@ -80,6 +80,13 @@ check("TMPDIR is a file -> fail-open (no infinite block)",
       run_env({"session_id": sid(), "last_assistant_message": MAL,
                "transcript_path": transcript([{"type": "text", "text": MAL}])}, {"TMPDIR": _notdir}), 0)
 
+# A user-supplied COURT_RECOVER_TOKENS that is not a valid regex must not break the
+# hook: detection simply can't compile, so the turn is allowed to stop (fail-open).
+check("pathological COURT_RECOVER_TOKENS regex -> fail-open (never blocks)",
+      run_env({"session_id": sid(), "last_assistant_message": MAL,
+               "transcript_path": transcript([{"type": "text", "text": MAL}])},
+              {"COURT_RECOVER_TOKENS": "("}), 0)
+
 # Unique-per-run ids so the suite is idempotent (the hashed counter file persists in TMPDIR).
 p2 = {"session_id": "../../../tmp/evil-" + str(time.time_ns()), "last_assistant_message": MAL,
       "transcript_path": transcript([{"type": "text", "text": MAL}])}
