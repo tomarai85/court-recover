@@ -5,7 +5,9 @@ A tiny [Claude Code](https://docs.anthropic.com/en/docs/claude-code) **Stop hook
 
 > 日本語: Claude Code を長時間回すと、tool 呼び出しが「テキスト」で漏れて(`court`/`count` 等のトークン + 生の `<invoke>` markup)、何も実行されず無言でターンが止まるバグを検知し、正しい呼び出しに自動で出し直させる小さな Stop hook。約100行 bash・fail-open・MIT。
 
-![court-recover: a tool call leaks out as text and the turn stalls; the hook catches it and forces a clean retry](assets/cover.png)
+![court-recover demo: a stalled turn where a tool call leaked out as text returns exit 2 (blocked, forcing a clean re-issue); a clean turn returns exit 0](assets/demo.gif)
+
+> The GIF runs the real hook against two Stop-hook payloads — a stalled turn and a clean one. Reproduce it with `bash demo/demo.sh` (regenerate the GIF with `vhs demo/demo.tape`).
 
 ---
 
@@ -31,6 +33,8 @@ It is intermittent, and it shows up exactly when you're not watching. I couldn't
 guard for this exact failure mode, so I wrote one. `Stop` is the stable hook point Claude Code exposes
 to users, so the practical approach is to **detect it after the turn and force a bounded clean re-issue**
 — which is all this hook does. (It does not rewrite the stream mid-flight; it catches the stalled turn.)
+
+![a tool call leaks out as text and the turn stalls; the hook catches it and forces a clean retry](assets/cover.png)
 
 ## What it does
 
