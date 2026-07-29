@@ -16,4 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: shellcheck court-recover.sh
+      # severity=warning: style/info findings differ between shellcheck versions
+      # (0.11 dropped SC2002, ubuntu's older build still reports it), so gating on
+      # them makes the result depend on the runner image, not on the code.
+      - run: shellcheck --severity=warning court-recover.sh
