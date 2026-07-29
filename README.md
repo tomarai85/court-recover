@@ -1,5 +1,8 @@
 # court-recover
 
+[![tests](https://github.com/tomarai85/court-recover/actions/workflows/tests.yml/badge.svg)](https://github.com/tomarai85/court-recover/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A tiny [Claude Code](https://docs.anthropic.com/en/docs/claude-code) **Stop hook** that catches the
 "tool-call-as-text" stall and forces a clean retry. ~100 lines of bash. Fail-open. Needs only `bash` + `python3`.
 
